@@ -9,15 +9,43 @@
 
 #include <linux/types.h>
 
-#define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x1)
+#define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x2)
+
+/* using for rv1109 and rv1126 */
+#define RKMODULE_EXTEND_LINE		24
 
 #define RKMODULE_NAME_LEN		32
-#define RKMODULE_LSCDATA_LEN		441
+#define RKMODULE_LSCDATA_LEN		289
+
+#define RKMODULE_MAX_VC_CH		4
+
+#define RKMODULE_PADF_GAINMAP_LEN	1024
+#define RKMODULE_PDAF_DCCMAP_LEN	256
+#define RKMODULE_AF_OTP_MAX_LEN		3
 
 #define RKMODULE_CAMERA_MODULE_INDEX	"rockchip,camera-module-index"
 #define RKMODULE_CAMERA_MODULE_FACING	"rockchip,camera-module-facing"
 #define RKMODULE_CAMERA_MODULE_NAME	"rockchip,camera-module-name"
 #define RKMODULE_CAMERA_LENS_NAME	"rockchip,camera-module-lens-name"
+
+/* BT.656 & BT.1120 multi channel
+ * On which channels it can send video data
+ * related with struct rkmodule_bt656_mbus_info
+ */
+#define RKMODULE_CAMERA_BT656_ID_EN_BITS_1		(0x1)
+#define RKMODULE_CAMERA_BT656_ID_EN_BITS_2		(0x3)
+#define RKMODULE_CAMERA_BT656_ID_EN_BITS_3		(0x7)
+#define RKMODULE_CAMERA_BT656_ID_EN_BITS_4		(0xf)
+#define RKMODULE_CAMERA_BT656_PARSE_ID_LSB		BIT(0)
+#define RKMODULE_CAMERA_BT656_PARSE_ID_MSB		BIT(1)
+#define RKMODULE_CAMERA_BT656_CHANNEL_0			BIT(2)
+#define RKMODULE_CAMERA_BT656_CHANNEL_1			BIT(3)
+#define RKMODULE_CAMERA_BT656_CHANNEL_2			BIT(4)
+#define RKMODULE_CAMERA_BT656_CHANNEL_3			BIT(5)
+#define RKMODULE_CAMERA_BT656_CHANNELS			(RKMODULE_CAMERA_BT656_CHANNEL_0 | \
+							 RKMODULE_CAMERA_BT656_CHANNEL_1 | \
+							 RKMODULE_CAMERA_BT656_CHANNEL_2 | \
+							 RKMODULE_CAMERA_BT656_CHANNEL_3)
 
 #define RKMODULE_GET_MODULE_INFO	\
 	_IOR('V', BASE_VIDIOC_PRIVATE + 0, struct rkmodule_inf)
@@ -54,6 +82,30 @@
 
 #define RKMODULE_GET_BT656_INTF_TYPE	\
 	_IOR('V', BASE_VIDIOC_PRIVATE + 11, __u32)
+
+#define RKMODULE_GET_VC_FMT_INFO \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 12, struct rkmodule_vc_fmt_info)
+
+#define RKMODULE_GET_VC_HOTPLUG_INFO \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 13, struct rkmodule_vc_hotplug_info)
+
+#define RKMODULE_GET_START_STREAM_SEQ	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 14, __u32)
+
+#define RKMODULE_GET_VICAP_RST_INFO	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 15, struct rkmodule_vicap_reset_info)
+
+#define RKMODULE_SET_VICAP_RST_INFO	\
+	_IOW('V', BASE_VIDIOC_PRIVATE + 16, struct rkmodule_vicap_reset_info)
+
+#define RKMODULE_GET_BT656_MBUS_INFO	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 17, struct rkmodule_bt656_mbus_info)
+
+#define RKMODULE_GET_DCG_RATIO	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 18, struct rkmodule_dcg_ratio)
+
+#define RKMODULE_GET_SONY_BRL	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 19, __u32)
 
 /**
  * struct rkmodule_base_inf - module base information
@@ -112,7 +164,29 @@ struct rkmodule_lsc_inf {
 	__u16 lsc_b[RKMODULE_LSCDATA_LEN];
 	__u16 lsc_gr[RKMODULE_LSCDATA_LEN];
 	__u16 lsc_gb[RKMODULE_LSCDATA_LEN];
+
+	__u16 width;
+	__u16 height;
+	__u16 table_size;
 } __attribute__ ((packed));
+
+/**
+ * enum rkmodule_af_dir - enum of module af otp direction
+ */
+enum rkmodele_af_otp_dir {
+	AF_OTP_DIR_HORIZONTAL = 0,
+	AF_OTP_DIR_UP = 1,
+	AF_OTP_DIR_DOWN = 2,
+};
+
+/**
+ * struct rkmodule_af_otp - module af otp in one direction
+ */
+struct rkmodule_af_otp {
+	__u32 vcm_start;
+	__u32 vcm_end;
+	__u32 vcm_dir;
+};
 
 /**
  * struct rkmodule_af_inf - module af information
@@ -120,10 +194,47 @@ struct rkmodule_lsc_inf {
  */
 struct rkmodule_af_inf {
 	__u32 flag;
+	__u32 dir_cnt;
+	struct rkmodule_af_otp af_otp[RKMODULE_AF_OTP_MAX_LEN];
+} __attribute__ ((packed));
 
-	__u32 vcm_start;
-	__u32 vcm_end;
-	__u32 vcm_dir;
+/**
+ * struct rkmodule_pdaf_inf - module pdaf information
+ *
+ */
+struct rkmodule_pdaf_inf {
+	__u32 flag;
+
+	__u32 gainmap_width;
+	__u32 gainmap_height;
+	__u32 dccmap_width;
+	__u32 dccmap_height;
+	__u32 dcc_mode;
+	__u32 dcc_dir;
+	__u16 gainmap[RKMODULE_PADF_GAINMAP_LEN];
+	__u16 dccmap[RKMODULE_PDAF_DCCMAP_LEN];
+} __attribute__ ((packed));
+
+/**
+ * struct rkmodule_otp_module_inf - otp module info
+ *
+ */
+struct rkmodule_otp_module_inf {
+	__u32 flag;
+	__u8 vendor[8];
+	__u32 module_id;
+	__u16 version;
+	__u16 full_width;
+	__u16 full_height;
+	__u8 supplier_id;
+	__u8 year;
+	__u8 mouth;
+	__u8 day;
+	__u8 sensor_id;
+	__u8 lens_id;
+	__u8 vcm_id;
+	__u8 drv_id;
+	__u8 flip;
 } __attribute__ ((packed));
 
 /**
@@ -136,6 +247,8 @@ struct rkmodule_inf {
 	struct rkmodule_awb_inf awb;
 	struct rkmodule_lsc_inf lsc;
 	struct rkmodule_af_inf af;
+	struct rkmodule_pdaf_inf pdaf;
+	struct rkmodule_otp_module_inf module_inf;
 } __attribute__ ((packed));
 
 /**
@@ -223,8 +336,8 @@ struct rkmodule_hdr_cfg {
  * eav: end of active video codes
  */
 struct rkmodule_sync_code {
-	u16 sav;
-	u16 eav;
+	__u16 sav;
+	__u16 eav;
 };
 
 /* sensor lvds difference sync code mode
@@ -323,6 +436,66 @@ struct rkmodule_nr_switch_threshold {
 enum rkmodule_bt656_intf_type {
 	BT656_STD_RAW = 0,
 	BT656_SONY_RAW,
+};
+
+/**
+ * struct rkmodule_vc_fmt_info - virtual channels fmt info
+ *
+ */
+struct rkmodule_vc_fmt_info {
+	__u32 width[RKMODULE_MAX_VC_CH];
+	__u32 height[RKMODULE_MAX_VC_CH];
+	__u32 fps[RKMODULE_MAX_VC_CH];
+} __attribute__ ((packed));
+
+/**
+ * struct rkmodule_vc_hotplug_info - virtual channels hotplug status info
+ * detect_status: hotplug status
+ *     bit 0~3 means channels id, value : 0 -> plug out, 1 -> plug in.
+ */
+struct rkmodule_vc_hotplug_info {
+	__u8 detect_status;
+} __attribute__ ((packed));
+
+
+/* sensor start stream sequence
+ * RKMODULE_START_STREAM_DEFAULT: by default
+ * RKMODULE_START_STREAM_BEHIND : sensor start stream should be behind the controller
+ * RKMODULE_START_STREAM_FRONT  : sensor start stream should be in front of the controller
+ */
+enum rkmodule_start_stream_seq {
+	RKMODULE_START_STREAM_DEFAULT = 0,
+	RKMODULE_START_STREAM_BEHIND,
+	RKMODULE_START_STREAM_FRONT,
+};
+
+/*
+ * the causation to do cif reset work
+ */
+enum rkmodule_reset_src {
+	RKCIF_RESET_SRC_NON = 0x0,
+	RKCIF_RESET_SRC_ERR_CSI2,
+	RKCIF_RESET_SRC_ERR_LVDS,
+	RKICF_RESET_SRC_ERR_CUTOFF,
+	RKCIF_RESET_SRC_ERR_HOTPLUG,
+	RKCIF_RESET_SRC_ERR_APP,
+};
+
+struct rkmodule_vicap_reset_info {
+	__u32 is_reset;
+	enum rkmodule_reset_src src;
+} __attribute__ ((packed));
+
+struct rkmodule_bt656_mbus_info {
+	__u32 flags;
+	__u32 id_en_bits;
+} __attribute__ ((packed));
+
+/* DCG ratio (float) = integer + decimal / div_coeff */
+struct rkmodule_dcg_ratio {
+	__u32 integer;
+	__u32 decimal;
+	__u32 div_coeff;
 };
 
 #endif /* _RKMODULE_CAMERA_H */
